@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mi Gestor Financiero</title>
+  <title>Mi Gestor Financiero TOP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 font-sans min-h-screen">
+<body>
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
@@ -20,7 +20,7 @@
         { id: 'extra', label: 'Paga Extra / Freelance' }
       ],
       EXPENSE: [
-        { id: 'hogar_padres', label: 'Hogar / Aportación Familiar' },
+        { id: 'hogar_padres', label: 'Hogar / Aportación' },
         { id: 'deportes', label: 'Deporte y Gimnasio' },
         { id: 'caprichos', label: 'Caprichos y Ocio' },
         { id: 'imprevistos', label: 'Imprevistos' }
@@ -30,9 +30,16 @@
     function App() {
       const [txs, setTxs] = useState(() => JSON.parse(localStorage.getItem('my_txs') || '[]'));
       const [tab, setTab] = useState('home');
+      const [darkMode, setDarkMode] = useState(() => JSON.parse(localStorage.getItem('my_theme') ?? 'true'));
       const [houseGoal, setHouseGoal] = useState(() => Number(localStorage.getItem('my_houseGoal')) || 30000);
       const [targetRatio, setTargetRatio] = useState(() => Number(localStorage.getItem('my_ratio')) || 30);
 
+      // Simulador Vivienda State
+      const [propertyPrice, setPropertyPrice] = useState(150000);
+      const [downPaymentPct, setDownPaymentPct] = useState(20);
+      const [taxPct, setTaxPct] = useState(10);
+
+      // Form State
       const [type, setType] = useState('expense');
       const [amount, setAmount] = useState('');
       const [catId, setCatId] = useState('hogar_padres');
@@ -42,6 +49,7 @@
       const [search, setSearch] = useState('');
 
       useEffect(() => { localStorage.setItem('my_txs', JSON.stringify(txs)); }, [txs]);
+      useEffect(() => { localStorage.setItem('my_theme', JSON.stringify(darkMode)); }, [darkMode]);
       useEffect(() => { localStorage.setItem('my_houseGoal', houseGoal); }, [houseGoal]);
       useEffect(() => { localStorage.setItem('my_ratio', targetRatio); }, [targetRatio]);
 
@@ -107,147 +115,329 @@
 
       const housePct = Math.min(100, Math.round((totalSavings / houseGoal) * 100));
 
+      // Desglose de Gastos por Categoría del Mes
+      const categoryBreakdown = useMemo(() => {
+        const map = {};
+        CATEGORIES.EXPENSE.forEach(c => map[c.id] = { label: c.label, amount: 0 });
+        monthTxs.filter(t => t.type === 'expense').forEach(t => {
+          if (!map[t.catId]) map[t.catId] = { label: t.catLabel, amount: 0 };
+          map[t.catId].amount += t.amount;
+        });
+        return Object.values(map);
+      }, [monthTxs]);
+
+      // Histórico Mensual para Gráficas
+      const monthlyHistory = useMemo(() => {
+        const map = {};
+        txs.forEach(t => {
+          const m = t.date.slice(0, 7);
+          if (!map[m]) map[m] = { month: m, inc: 0, exp: 0 };
+          if (t.type === 'income') map[m].inc += t.amount;
+          if (t.type === 'expense') map[m].exp += t.amount;
+        });
+        return Object.values(map).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
+      }, [txs]);
+
+      // Cálculos Simulador Vivienda
+      const simTotalRequired = propertyPrice * ((downPaymentPct + taxPct) / 100);
+      const simRemaining = Math.max(0, simTotalRequired - totalSavings);
+      const simMonthsNeeded = monthlySavings > 0 ? Math.ceil(simRemaining / monthlySavings) : null;
+
+      // Logros
+      const badges = [
+        { id: 1, title: '🚀 Primer Registro', desc: 'Añadir tu primer movimiento', unlocked: txs.length > 0 },
+        { id: 2, title: '🛡️ Escudo Financiero', desc: 'Tasa de ahorro > 70% este mes', unlocked: savingsPct >= 70 && monthlyIncome > 0 },
+        { id: 3, title: '☀️ Bote de Verano > 200€', desc: 'Superar 200€ en tu bote libre', unlocked: totalExtraPot >= 200 },
+        { id: 4, title: '🏠 25% de la Casa', desc: 'Alcanzar un cuarto de la meta', unlocked: housePct >= 25 },
+        { id: 5, title: '🏰 Mitad del Camino', desc: 'Llegar al 50% del objetivo vivienda', unlocked: housePct >= 50 }
+      ];
+
+      // Dynamic Theme Styles
+      const mainBg = darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900';
+      const cardBg = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
+      const inputBg = darkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900';
+      const subText = darkMode ? 'text-slate-400' : 'text-slate-500';
+
       return (
-        <div className="pb-20 max-w-2xl mx-auto px-4 py-4 space-y-5">
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
-            <div>
-              <h1 className="font-extrabold text-lg text-emerald-400">Habitat Control</h1>
-              <p className="text-xs text-slate-400">Gestor de Ahorro Vida Adulta</p>
+        <div className={`min-h-screen font-sans pb-20 ${mainBg}`}>
+          <div className="max-w-2xl mx-auto px-4 py-4 space-y-5">
+            
+            {/* Header */}
+            <div className={`${cardBg} p-4 rounded-2xl border flex items-center justify-between`}>
+              <div>
+                <h1 className="font-extrabold text-lg text-emerald-500">Habitat Control TOP</h1>
+                <p className={`text-xs ${subText}`}>Gestor Inteligente de Ahorro</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setDarkMode(!darkMode)} 
+                  className={`p-2 rounded-xl text-xs font-bold border ${darkMode ? 'bg-slate-800 border-slate-700 text-amber-400' : 'bg-slate-100 border-slate-300 text-slate-800'}`}
+                >
+                  {darkMode ? '☀️ Claro' : '🌙 Oscuro'}
+                </button>
+              </div>
             </div>
-            <div className="flex gap-1 text-xs">
-              <button onClick={() => setTab('home')} className={`px-3 py-1.5 rounded-xl font-bold ${tab==='home'?'bg-emerald-500 text-slate-950':'text-slate-400'}`}>Inicio</button>
-              <button onClick={() => setTab('txs')} className={`px-3 py-1.5 rounded-xl font-bold ${tab==='txs'?'bg-emerald-500 text-slate-950':'text-slate-400'}`}>Lista</button>
-              <button onClick={() => setTab('goals')} className={`px-3 py-1.5 rounded-xl font-bold ${tab==='goals'?'bg-emerald-500 text-slate-950':'text-slate-400'}`}>Metas</button>
+
+            {/* Sub-Navigation */}
+            <div className="flex gap-1 overflow-x-auto pb-1 text-xs">
+              <button onClick={() => setTab('home')} className={`px-3 py-2 rounded-xl font-bold flex-shrink-0 ${tab==='home'?'bg-emerald-500 text-slate-950':`${cardBg} ${subText}`}`}>📊 Inicio</button>
+              <button onClick={() => setTab('analytics')} className={`px-3 py-2 rounded-xl font-bold flex-shrink-0 ${tab==='analytics'?'bg-emerald-500 text-slate-950':`${cardBg} ${subText}`}`}>📈 Gráficas</button>
+              <button onClick={() => setTab('sim')} className={`px-3 py-2 rounded-xl font-bold flex-shrink-0 ${tab==='sim'?'bg-emerald-500 text-slate-950':`${cardBg} ${subText}`}`}>🧮 Sim. Casa</button>
+              <button onClick={() => setTab('badges')} className={`px-3 py-2 rounded-xl font-bold flex-shrink-0 ${tab==='badges'?'bg-emerald-500 text-slate-950':`${cardBg} ${subText}`}`}>🏆 Logros</button>
+              <button onClick={() => setTab('txs')} className={`px-3 py-2 rounded-xl font-bold flex-shrink-0 ${tab==='txs'?'bg-emerald-500 text-slate-950':`${cardBg} ${subText}`}`}>📋 Lista</button>
+              <button onClick={() => setTab('goals')} className={`px-3 py-2 rounded-xl font-bold flex-shrink-0 ${tab==='goals'?'bg-emerald-500 text-slate-950':`${cardBg} ${subText}`}`}>⚙️ Ajustes</button>
             </div>
-          </div>
 
-          {tab === 'home' && (
-            <div className="space-y-4">
-              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-300">Mes a consultar:</span>
-                <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="bg-slate-950 text-emerald-400 font-bold text-xs p-2 rounded-xl border border-slate-800 outline-none" />
-              </div>
+            {/* TAB 1: HOME */}
+            {tab === 'home' && (
+              <div className="space-y-4">
+                <div className={`${cardBg} p-3 rounded-2xl border flex justify-between items-center`}>
+                  <span className={`text-xs font-bold ${subText}`}>Mes activo:</span>
+                  <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className={`${inputBg} font-bold text-xs p-2 rounded-xl border outline-none`} />
+                </div>
 
-              <div className="bg-gradient-to-br from-slate-900 via-emerald-950/50 to-slate-900 border border-emerald-500/30 p-5 rounded-2xl space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">🏠 Meta Entrada Casa</span>
-                    <h2 className="text-2xl font-black text-white mt-2">{totalSavings.toLocaleString('es-ES')} €</h2>
-                    <p className="text-xs text-slate-400">Ahorro total acumulado</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold">Objetivo</span>
-                    <p className="text-sm font-bold text-white">{houseGoal.toLocaleString('es-ES')} €</p>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-emerald-400 h-full transition-all" style={{width: `${housePct}%`}}></div>
-                  </div>
-                  <div className="flex justify-between text-[11px] font-bold text-emerald-400">
-                    <span>{housePct}% completado</span>
-                    {monthlySavings > 0 && <span>~{Math.ceil((houseGoal - totalSavings) / monthlySavings)} meses faltantes</span>}
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl flex justify-between items-center">
-                <div>
-                  <span className="text-[10px] font-bold text-amber-400 uppercase block">☀️ Bote de Verano / Premios</span>
-                  <p className="text-lg font-black text-white">+{totalExtraPot.toLocaleString('es-ES')} € Acumulados</p>
-                  <p className="text-[11px] text-slate-400">Extra generado por gastar menos del {targetRatio}%</p>
-                </div>
-                <div className="bg-slate-900 p-2.5 rounded-xl border border-amber-500/30 text-center">
-                  <span className="text-[9px] text-amber-400 uppercase block font-bold">Este mes</span>
-                  <span className="text-xs font-extrabold text-white">+{monthExtraPot.toLocaleString('es-ES')} €</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800">
-                  <span className="text-slate-400 block">Ingresado</span>
-                  <span className="text-base font-bold text-emerald-400">{monthlyIncome.toLocaleString('es-ES')} €</span>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800">
-                  <span className="text-slate-400 block">Gastado</span>
-                  <span className="text-base font-bold text-rose-400">{monthlyExpenses.toLocaleString('es-ES')} € ({expensePct}%)</span>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800">
-                  <span className="text-slate-400 block">Ahorrado Mes</span>
-                  <span className="text-base font-bold text-blue-400">{monthlySavings.toLocaleString('es-ES')} € ({savingsPct}%)</span>
-                </div>
-                <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800">
-                  <span className="text-slate-400 block">Límite Gastos ({targetRatio}%)</span>
-                  <span className="text-base font-bold text-amber-400">{maxExpenseLimit.toLocaleString('es-ES')} €</span>
-                </div>
-              </div>
-
-              <form onSubmit={addTx} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
-                <h3 className="font-bold text-sm text-white">➕ Añadir Movimiento</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => handleTypeChange('income')} className={`py-1.5 rounded-xl text-xs font-bold ${type==='income'?'bg-emerald-500 text-slate-950':'bg-slate-800 text-slate-400'}`}>+ Ingreso</button>
-                  <button type="button" onClick={() => handleTypeChange('expense')} className={`py-1.5 rounded-xl text-xs font-bold ${type==='expense'?'bg-rose-500 text-white':'bg-slate-800 text-slate-400'}`}>- Gasto</button>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Importe (€)</label>
-                    <input type="number" step="0.01" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white font-bold outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Categoría</label>
-                    <select value={catId} onChange={e => setCatId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white outline-none">
-                      {(type === 'income' ? CATEGORIES.INCOME : CATEGORIES.EXPENSE).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Concepto</label>
-                    <input type="text" placeholder="Ej. Gym, Nómina..." value={desc} onChange={e => setDesc(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Fecha</label>
-                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-white outline-none" />
-                  </div>
-                </div>
-                <button type="submit" className="w-full bg-emerald-500 text-slate-950 font-black text-xs py-2.5 rounded-xl uppercase tracking-wider">Guardar Movimiento</button>
-              </form>
-            </div>
-          )}
-
-          {tab === 'txs' && (
-            <div className="space-y-3">
-              <input type="text" placeholder="🔍 Buscar movimiento..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-3 text-xs text-white outline-none" />
-              <div className="bg-slate-900 rounded-2xl border border-slate-800 divide-y divide-slate-800/60">
-                {filteredTxs.length === 0 ? <p className="p-5 text-center text-xs text-slate-500">No hay movimientos guardados</p> : filteredTxs.map(t => (
-                  <div key={t.id} className="p-3.5 flex justify-between items-center text-xs">
+                <div className="bg-gradient-to-br from-emerald-900/60 via-slate-900 to-slate-900 border border-emerald-500/40 p-5 rounded-2xl space-y-3 text-white">
+                  <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-bold text-white">{t.desc}</p>
-                      <p className="text-[10px] text-slate-400">{t.catLabel} • {t.date}</p>
+                      <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/30">🏠 Meta Entrada Casa</span>
+                      <h2 className="text-2xl font-black mt-2">{totalSavings.toLocaleString('es-ES')} €</h2>
+                      <p className="text-xs text-slate-300">Ahorro total acumulado</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`font-black ${t.type==='income'?'text-emerald-400':'text-slate-200'}`}>{t.type==='income'?'+':'-'}{t.amount.toLocaleString('es-ES')} €</span>
-                      <button onClick={() => delTx(t.id)} className="text-slate-500 hover:text-rose-400 px-1">🗑️</button>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Objetivo</span>
+                      <p className="text-sm font-bold">{houseGoal.toLocaleString('es-ES')} €</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  <div className="space-y-1">
+                    <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                      <div className="bg-emerald-400 h-full transition-all" style={{width: `${housePct}%`}}></div>
+                    </div>
+                    <div className="flex justify-between text-[11px] font-bold text-emerald-400">
+                      <span>{housePct}% completado</span>
+                      {monthlySavings > 0 && <span>~{Math.ceil((houseGoal - totalSavings) / monthlySavings)} meses faltantes</span>}
+                    </div>
+                  </div>
+                </div>
 
-          {tab === 'goals' && (
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-4 text-xs">
-              <h3 className="font-bold text-white text-sm">🎯 Configuración de Metas</h3>
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Meta Entrada Casa (€)</label>
-                <input type="number" value={houseGoal} onChange={e => setHouseGoal(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-bold outline-none" />
+                <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl flex justify-between items-center">
+                  <div>
+                    <span className="text-[10px] font-bold text-amber-400 uppercase block">☀️ Bote Libre de Ocio y Verano</span>
+                    <p className="text-lg font-black text-amber-300">+{totalExtraPot.toLocaleString('es-ES')} € Acumulados</p>
+                    <p className={`text-[11px] ${subText}`}>Extra generado por gastar menos del {targetRatio}%</p>
+                  </div>
+                  <div className={`${cardBg} p-2.5 rounded-xl border border-amber-500/30 text-center`}>
+                    <span className="text-[9px] text-amber-400 uppercase block font-bold">Este mes</span>
+                    <span className="text-xs font-extrabold">+{monthExtraPot.toLocaleString('es-ES')} €</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className={`${cardBg} p-3 rounded-2xl border`}>
+                    <span className={`${subText} block`}>Ingresado</span>
+                    <span className="text-base font-bold text-emerald-500">{monthlyIncome.toLocaleString('es-ES')} €</span>
+                  </div>
+                  <div className={`${cardBg} p-3 rounded-2xl border`}>
+                    <span className={`${subText} block`}>Gastado</span>
+                    <span className="text-base font-bold text-rose-500">{monthlyExpenses.toLocaleString('es-ES')} € ({expensePct}%)</span>
+                  </div>
+                  <div className={`${cardBg} p-3 rounded-2xl border`}>
+                    <span className={`${subText} block`}>Ahorrado Mes</span>
+                    <span className="text-base font-bold text-blue-500">{monthlySavings.toLocaleString('es-ES')} € ({savingsPct}%)</span>
+                  </div>
+                  <div className={`${cardBg} p-3 rounded-2xl border`}>
+                    <span className={`${subText} block`}>Límite Gasto ({targetRatio}%)</span>
+                    <span className="text-base font-bold text-amber-500">{maxExpenseLimit.toLocaleString('es-ES')} €</span>
+                  </div>
+                </div>
+
+                <form onSubmit={addTx} className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
+                  <h3 className="font-bold text-sm">➕ Registrar Movimiento</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => handleTypeChange('income')} className={`py-1.5 rounded-xl text-xs font-bold ${type==='income'?'bg-emerald-500 text-slate-950':`${inputBg}`}`}>+ Ingreso</button>
+                    <button type="button" onClick={() => handleTypeChange('expense')} className={`py-1.5 rounded-xl text-xs font-bold ${type==='expense'?'bg-rose-500 text-white':`${inputBg}`}`}>- Gasto</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className={`text-[10px] ${subText} uppercase font-bold block mb-1`}>Importe (€)</label>
+                      <input type="number" step="0.01" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} className={`w-full ${inputBg} rounded-xl p-2 font-bold outline-none border`} />
+                    </div>
+                    <div>
+                      <label className={`text-[10px] ${subText} uppercase font-bold block mb-1`}>Categoría</label>
+                      <select value={catId} onChange={e => setCatId(e.target.value)} className={`w-full ${inputBg} rounded-xl p-2 outline-none border`}>
+                        {(type === 'income' ? CATEGORIES.INCOME : CATEGORIES.EXPENSE).map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className={`text-[10px] ${subText} uppercase font-bold block mb-1`}>Concepto</label>
+                      <input type="text" placeholder="Ej. Gym, Nómina..." value={desc} onChange={e => setDesc(e.target.value)} className={`w-full ${inputBg} rounded-xl p-2 outline-none border`} />
+                    </div>
+                    <div>
+                      <label className={`text-[10px] ${subText} uppercase font-bold block mb-1`}>Fecha</label>
+                      <input type="date" value={date} onChange={e => setDate(e.target.value)} className={`w-full ${inputBg} rounded-xl p-2 outline-none border`} />
+                    </div>
+                  </div>
+                  <button type="submit" className="w-full bg-emerald-500 text-slate-950 font-black text-xs py-2.5 rounded-xl uppercase tracking-wider">Guardar Movimiento</button>
+                </form>
               </div>
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Límite Máximo de Gastos ({targetRatio}%)</label>
-                <input type="range" min="10" max="60" step="5" value={targetRatio} onChange={e => setTargetRatio(Number(e.target.value))} className="w-full accent-emerald-500" />
+            )}
+
+            {/* TAB 2: GRÁFICAS & INFORMES */}
+            {tab === 'analytics' && (
+              <div className="space-y-4">
+                <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
+                  <h3 className="font-bold text-sm">📊 Distribución de Gastos ({selectedMonth})</h3>
+                  <div className="space-y-2">
+                    {categoryBreakdown.map((item, idx) => {
+                      const pct = monthlyExpenses > 0 ? Math.round((item.amount / monthlyExpenses) * 100) : 0;
+                      return (
+                        <div key={idx} className="space-y-1 text-xs">
+                          <div className="flex justify-between font-bold">
+                            <span>{item.label}</span>
+                            <span>{item.amount.toLocaleString('es-ES')} € ({pct}%)</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div className="bg-emerald-500 h-full" style={{ width: `${pct}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
+                  <h3 className="font-bold text-sm">📈 Evolución Histórica (Últimos meses)</h3>
+                  {monthlyHistory.length === 0 ? <p className={`text-xs ${subText}`}>No hay suficientes datos registrados.</p> : (
+                    <div className="space-y-3 pt-2">
+                      {monthlyHistory.map((h, i) => (
+                        <div key={i} className="text-xs space-y-1">
+                          <div className="flex justify-between font-bold">
+                            <span>{h.month}</span>
+                            <span className="text-emerald-500">+{h.inc}€ / <span className="text-rose-500">-{h.exp}€</span></span>
+                          </div>
+                          <div className="flex gap-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="bg-emerald-500 h-full" style={{ width: `${h.inc > 0 ? Math.min(100, (h.inc / (h.inc + h.exp)) * 100) : 0}%` }}></div>
+                            <div className="bg-rose-500 h-full" style={{ width: `${h.exp > 0 ? Math.min(100, (h.exp / (h.inc + h.exp)) * 100) : 0}%` }}></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* TAB 3: SIMULADOR VIVIENDA */}
+            {tab === 'sim' && (
+              <div className="space-y-4">
+                <div className={`${cardBg} p-5 rounded-2xl border space-y-4 text-xs`}>
+                  <h3 className="font-bold text-sm">🧮 Simulador de Compra de Vivienda</h3>
+                  <p className={subText}>Calcula cuánto necesitas realmente para la entrada e impuestos de tu piso.</p>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="font-bold block mb-1">Precio Estimado de la Vivienda (€)</label>
+                      <input type="number" step="5000" value={propertyPrice} onChange={e => setPropertyPrice(Number(e.target.value))} className={`w-full ${inputBg} p-2.5 rounded-xl border font-bold text-sm outline-none`} />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="font-bold block mb-1">% Entrada Hipoteca</label>
+                        <input type="number" value={downPaymentPct} onChange={e => setDownPaymentPct(Number(e.target.value))} className={`w-full ${inputBg} p-2 rounded-xl border font-bold outline-none`} />
+                      </div>
+                      <div>
+                        <label className="font-bold block mb-1">% Impuestos y Gastos</label>
+                        <input type="number" value={taxPct} onChange={e => setTaxPct(Number(e.target.value))} className={`w-full ${inputBg} p-2 rounded-xl border font-bold outline-none`} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-800 pt-3 space-y-2">
+                    <div className="flex justify-between font-bold text-sm">
+                      <span>Total Ahorro Necesario ({downPaymentPct + taxPct}%):</span>
+                      <span className="text-emerald-500">{simTotalRequired.toLocaleString('es-ES')} €</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className={subText}>Tienes ahorrado:</span>
+                      <span className="font-bold">{totalSavings.toLocaleString('es-ES')} €</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className={subText}>Te falta por ahorrar:</span>
+                      <span className="font-bold text-amber-500">{simRemaining.toLocaleString('es-ES')} €</span>
+                    </div>
+
+                    {simMonthsNeeded !== null && (
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl text-center text-emerald-400 font-bold mt-2">
+                        ⏱️ Tiempo estimado: ~{simMonthsNeeded} meses ({Math.round(simMonthsNeeded/12*10)/10} años) al ritmo de ahorro actual.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: LOGROS & INSIGNIAS */}
+            {tab === 'badges' && (
+              <div className="space-y-3">
+                <div className={`${cardBg} p-4 rounded-2xl border`}>
+                  <h3 className="font-bold text-sm mb-1">🏆 Insignias de Ahorro</h3>
+                  <p className={`text-xs ${subText}`}>Desbloquea logros cumpliendo tus metas financieras.</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  {badges.map(b => (
+                    <div key={b.id} className={`${cardBg} p-3.5 rounded-2xl border flex items-center gap-3 ${b.unlocked ? 'border-emerald-500/50' : 'opacity-50'}`}>
+                      <div className={`p-2.5 rounded-xl text-lg ${b.unlocked ? 'bg-emerald-500/20' : 'bg-slate-800'}`}>
+                        {b.unlocked ? '✅' : '🔒'}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-xs">{b.title}</h4>
+                        <p className={`text-[11px] ${subText}`}>{b.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 5: MOVIMIENTOS */}
+            {tab === 'txs' && (
+              <div className="space-y-3">
+                <input type="text" placeholder="🔍 Buscar movimiento..." value={search} onChange={e => setSearch(e.target.value)} className={`w-full ${inputBg} rounded-2xl p-3 text-xs outline-none border`} />
+                <div className={`${cardBg} rounded-2xl border divide-y divide-slate-800/60`}>
+                  {filteredTxs.length === 0 ? <p className={`p-5 text-center text-xs ${subText}`}>No hay movimientos guardados</p> : filteredTxs.map(t => (
+                    <div key={t.id} className="p-3.5 flex justify-between items-center text-xs">
+                      <div>
+                        <p className="font-bold">{t.desc}</p>
+                        <p className={`text-[10px] ${subText}`}>{t.catLabel} • {t.date}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-black ${t.type==='income'?'text-emerald-500':'text-rose-500'}`}>{t.type==='income'?'+':'-'}{t.amount.toLocaleString('es-ES')} €</span>
+                        <button onClick={() => delTx(t.id)} className="text-slate-500 hover:text-rose-400 px-1">🗑️</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 6: AJUSTES */}
+            {tab === 'goals' && (
+              <div className={`${cardBg} p-5 rounded-2xl border space-y-4 text-xs`}>
+                <h3 className="font-bold text-sm">⚙️ Ajustes de Presupuesto</h3>
+                <div>
+                  <label className="block font-bold mb-1">Meta Entrada Casa (€)</label>
+                  <input type="number" value={houseGoal} onChange={e => setHouseGoal(Number(e.target.value))} className={`w-full ${inputBg} rounded-xl p-2.5 font-bold outline-none border`} />
+                </div>
+                <div>
+                  <label className="block font-bold mb-1">Límite Máximo de Gastos ({targetRatio}%)</label>
+                  <input type="range" min="10" max="60" step="5" value={targetRatio} onChange={e => setTargetRatio(Number(e.target.value))} className="w-full accent-emerald-500" />
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
       );
     }
